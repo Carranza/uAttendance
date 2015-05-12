@@ -11,10 +11,13 @@ import android.widget.AbsListView;
 import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
 import android.widget.ListAdapter;
+import android.widget.ListView;
 import android.widget.TextView;
+import android.widget.Toast;
 
 
 import carranza.com.uattendance.dummy.DummyContent;
+import carranza.com.uattendance.protocol.IBeacon;
 
 /**
  * A fragment representing a list of Items.
@@ -81,9 +84,11 @@ public class BeaconFragment extends Fragment implements AbsListView.OnItemClickL
             mParam2 = getArguments().getString(ARG_PARAM2);
         }
 
-        // TODO: Change Adapter to display your content
+        mAdapter = NavigationDrawerFragment._beaconsAdapter;
+        /*
         mAdapter = new ArrayAdapter<DummyContent.DummyItem>(getActivity(),
                 android.R.layout.simple_list_item_1, android.R.id.text1, DummyContent.ITEMS);
+        */
     }
 
     @Override
@@ -131,6 +136,10 @@ public class BeaconFragment extends Fragment implements AbsListView.OnItemClickL
             // fragment is attached to one) that an item has been selected.
             mListener.onFragmentInteraction(DummyContent.ITEMS.get(position).id);
         }
+
+        // IBeacon beacon = NavigationDrawerFragment._beacons.get(position);
+        // Toast.makeText(getActivity(), NavigationDrawerFragment._beacons.size(), Toast.LENGTH_SHORT).show();
+        // System.out.println(NavigationDrawerFragment._beacons.size());
     }
 
     /**

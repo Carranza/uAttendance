@@ -1,6 +1,11 @@
 package carranza.com.uattendance;
 
 import android.app.Activity;
+import android.app.AlertDialog;
+import android.content.DialogInterface;
+import android.content.Intent;
+import android.net.Uri;
+import android.os.AsyncTask;
 import android.os.Bundle;
 import android.support.v4.app.Fragment;
 import android.view.LayoutInflater;
@@ -11,7 +16,14 @@ import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
 import android.widget.ListAdapter;
 import android.widget.TextView;
+import android.widget.Toast;
 
+
+import org.json.JSONArray;
+import org.json.JSONException;
+import org.json.JSONObject;
+
+import java.util.ArrayList;
 
 import carranza.com.uattendance.dummy.DummyContent;
 
@@ -80,9 +92,27 @@ public class DocumentFragment extends Fragment implements AbsListView.OnItemClic
             mParam2 = getArguments().getString(ARG_PARAM2);
         }
 
-        // TODO: Change Adapter to display your content
-        mAdapter = new ArrayAdapter<DummyContent.DummyItem>(getActivity(),
-                android.R.layout.simple_list_item_1, android.R.id.text1, DummyContent.ITEMS);
+        ArrayList<String> docs = new ArrayList<>();
+
+        for (int i = 0; i < Utils.documents.length(); i++) {
+            try {
+                JSONObject document = Utils.documents.getJSONObject(i);
+
+                String[] separated = document.getString("path").split("/");
+                if (Utils.flag == 0) {
+                    docs.add(separated[2] + ": " + document.getString("name"));
+                }
+                else {
+                    if (separated[2].equals("CU"))
+                        docs.add(separated[2] + ": " + document.getString("name"));
+                }
+            } catch (JSONException e) {
+                e.printStackTrace();
+            }
+        }
+
+        mAdapter = new ArrayAdapter<String>(getActivity(),
+                android.R.layout.simple_list_item_1, android.R.id.text1, docs);
     }
 
     @Override
@@ -130,6 +160,27 @@ public class DocumentFragment extends Fragment implements AbsListView.OnItemClic
             // fragment is attached to one) that an item has been selected.
             mListener.onFragmentInteraction(DummyContent.ITEMS.get(position).id);
         }
+
+        TextView tv = (TextView) view.findViewById(android.R.id.text1);
+        String s = tv.getText().toString();
+        String[] separated = s.split(": ");
+
+        for (int i = 0; i < Utils.documents.length(); i++) {
+            try {
+                JSONObject document = Utils.documents.getJSONObject(i);
+
+                if (separated[1].equals(document.getString("name"))) {
+                    String url = "http://www.makingapps.es/upi" + document.getString("path") + "/" + document.getString("file");
+                    Intent intent = new Intent(Intent.ACTION_VIEW);
+                    intent.setData(Uri.parse(url));
+                    startActivity(intent);
+                }
+            } catch (JSONException e) {
+                e.printStackTrace();
+            }
+        }
+
+        Toast.makeText(getActivity(), separated[1], Toast.LENGTH_SHORT).show();
     }
 
     /**
@@ -160,4 +211,41 @@ public class DocumentFragment extends Fragment implements AbsListView.OnItemClic
         public void onFragmentInteraction(String id);
     }
 
+    /*
+    private class GetDocumentsAsyncTask extends AsyncTask<String, Void, String> {
+
+        @Override
+        protected String doInBackground(String... params) {
+            return Utils.requestGet(params[0]);
+        }
+
+        // onPostExecute displays the results of the AsyncTask.
+        @Override
+        protected void onPostExecute(String result) {
+            try {
+                documents = new JSONArray(result);
+                /*
+                for (int i = 0; i < documents.length(); i++) {
+                    JSONObject document = documents.getJSONObject(i);
+
+                    // System.out.println(document.getString("path"));
+                }
+                */
+    /*
+                String[] values = new String[] { "Android List View",
+                };
+
+                mAdapter = new ArrayAdapter<String>(getActivity(),
+                        android.R.layout.simple_list_item_1, android.R.id.text1, values);
+
+
+                mAdapter.no
+            } catch (JSONException e) {
+                e.printStackTrace();
+            }
+
+            System.out.println(documents);
+        }
+    }
+        */
 }

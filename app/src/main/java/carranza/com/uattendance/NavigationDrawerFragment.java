@@ -1,5 +1,9 @@
 package carranza.com.uattendance;
 
+import android.annotation.SuppressLint;
+import android.bluetooth.BluetoothAdapter;
+import android.content.Context;
+import android.content.Intent;
 import android.support.v7.app.ActionBarActivity;
 import android.app.Activity;
 import android.support.v7.app.ActionBar;
@@ -11,23 +15,32 @@ import android.content.SharedPreferences;
 import android.content.res.Configuration;
 import android.os.Bundle;
 import android.preference.PreferenceManager;
+import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.Menu;
 import android.view.MenuInflater;
 import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.animation.Animation;
+import android.view.animation.AnimationUtils;
 import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
+import android.widget.ImageView;
 import android.widget.ListView;
+import android.widget.TextView;
 import android.widget.Toast;
+
+import java.util.ArrayList;
+
+import carranza.com.uattendance.protocol.*;
 
 /**
  * Fragment used for managing interactions for and presentation of a navigation drawer.
  * See the <a href="https://developer.android.com/design/patterns/navigation-drawer.html#Interaction">
  * design guidelines</a> for a complete explanation of the behaviors implemented here.
  */
-public class NavigationDrawerFragment extends Fragment {
+public class NavigationDrawerFragment extends Fragment implements IBeaconListener {
 
     /**
      * Remember the position of the selected item.
@@ -58,6 +71,16 @@ public class NavigationDrawerFragment extends Fragment {
     private boolean mFromSavedInstanceState;
     private boolean mUserLearnedDrawer;
 
+    /* - Beacons -------------------------------------------------------------------------------- */
+    private static final int REQUEST_BLUETOOTH_ENABLE = 1;
+
+    public static ArrayList<IBeacon> _beacons;
+    public static ArrayAdapter<IBeacon> _beaconsAdapter;
+    public static IBeaconProtocol _ibp;
+
+    private Menu _menu;
+    /* ------------------------------------------------------------------------------------------ */
+
     public NavigationDrawerFragment() {
     }
 
@@ -77,7 +100,69 @@ public class NavigationDrawerFragment extends Fragment {
 
         // Select either the default item (0) or the last selected item.
         selectItem(mCurrentSelectedPosition);
+
+        /* - Beacons ---------------------------------------------------------------------------- */
+        if(_beacons == null)
+            _beacons = new ArrayList<IBeacon>();
+
+        _beaconsAdapter = new ArrayAdapter<IBeacon>(this.getActivity(), android.R.layout.simple_list_item_2, android.R.id.text1, _beacons){
+            @Override
+            public View getView(int position, View convertView, ViewGroup parent) {
+                View view = super.getView(position, convertView, parent);
+
+                TextView text1 = (TextView) view.findViewById(android.R.id.text1);
+                TextView text2 = (TextView) view.findViewById(android.R.id.text2);
+
+
+                IBeacon beacon = _beacons.get(position);
+
+                text1.setText(beacon.getUuidHexStringDashed());
+                text2.setText("Major: " + beacon.getMajor() + " Minor: " + beacon.getMinor() + " Distance: " + beacon.getProximity() + "m.");
+                return view;
+            }
+        };
+
+        // setListAdapter(_beaconsAdapter);
+
+        _ibp = IBeaconProtocol.getInstance(this.getActivity());
+        _ibp.setListener(this);
+        /* -------------------------------------------------------------------------------------- */
     }
+
+    /* - Beacons -------------------------------------------------------------------------------- */
+    @Override
+    public void onStop() {
+        _ibp.stopScan();
+        super.onStop();
+    }
+
+    private void scanBeacons(){
+        // Check Bluetooth every time
+        Log.i(carranza.com.uattendance.protocol.Utils.LOG_TAG, "Scanning");
+
+        // Filter based on default easiBeacon UUID, remove if not required
+        //_ibp.setScanUUID(UUID here);
+
+        if(!IBeaconProtocol.configureBluetoothAdapter(this.getActivity())){
+            Intent enableBtIntent = new Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE);
+            startActivityForResult(enableBtIntent, REQUEST_BLUETOOTH_ENABLE );
+        }else{
+            if(_ibp.isScanning())
+                _ibp.stopScan();
+            _ibp.reset();
+            _ibp.startScan();
+        }
+    }
+
+    @Override
+    public void onActivityResult(int requestCode, int resultCode, Intent data) {
+        if(requestCode == REQUEST_BLUETOOTH_ENABLE){
+            if(resultCode == Activity.RESULT_OK){
+                scanBeacons();
+            }
+        }
+    }
+    /* ------------------------------------------------------------------------------------------ */
 
     @Override
     public void onActivityCreated(Bundle savedInstanceState) {
@@ -240,6 +325,11 @@ public class NavigationDrawerFragment extends Fragment {
             inflater.inflate(R.menu.global, menu);
             showGlobalContextActionBar();
         }
+
+        /* - Beacons ---------------------------------------------------------------------------- */
+        _menu = menu;
+        /* -------------------------------------------------------------------------------------- */
+
         super.onCreateOptionsMenu(menu, inflater);
     }
 
@@ -250,12 +340,82 @@ public class NavigationDrawerFragment extends Fragment {
         }
 
         if (item.getItemId() == R.id.action_refresh) {
-            Toast.makeText(getActivity(), "Example action.", Toast.LENGTH_SHORT).show();
+            Toast.makeText(getActivity(), "Scanning!", Toast.LENGTH_SHORT).show();
+
+            /* - Beacons ------------------------------------------------------------------------ */
+            _beacons.clear();
+            _beaconsAdapter.notifyDataSetChanged();
+            scanBeacons();
+            /* ---------------------------------------------------------------------------------- */
+
             return true;
         }
 
         return super.onOptionsItemSelected(item);
     }
+
+    /* - Beacons -------------------------------------------------------------------------------- */
+    @SuppressLint("InflateParams")
+    private void startRefreshAnimation(){
+        MenuItem item = _menu.findItem(R.id.action_refresh);
+        LayoutInflater inflater = (LayoutInflater) this.getActivity().getSystemService(Context.LAYOUT_INFLATER_SERVICE);
+        ImageView iv = (ImageView)inflater.inflate(R.layout.refresh_button, null);
+        Animation rotation = AnimationUtils.loadAnimation(this.getActivity(), R.anim.rotate_refresh);
+        rotation.setRepeatCount(Animation.INFINITE);
+        iv.startAnimation(rotation);
+        item.setActionView(iv);
+    }
+
+    private void stopRefreshAnimation(){
+        MenuItem item = _menu.findItem(R.id.action_refresh);
+        if(item.getActionView()!=null){
+            // Remove the animation.
+            item.getActionView().clearAnimation();
+            item.setActionView(null);
+        }
+    }
+
+    // The following methods implement the IBeaconListener interface
+
+    @Override
+    public void beaconFound(IBeacon ibeacon) {
+        _beacons.add(ibeacon);
+        this.getActivity().runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                _beaconsAdapter.notifyDataSetChanged();
+            }
+        });
+    }
+
+    @Override
+    public void enterRegion(IBeacon ibeacon) {
+        // TODO Auto-generated method stub
+
+    }
+
+    @Override
+    public void exitRegion(IBeacon ibeacon) {
+        // TODO Auto-generated method stub
+
+    }
+
+    @Override
+    public void operationError(int status) {
+        Log.i(carranza.com.uattendance.protocol.Utils.LOG_TAG, "Bluetooth error: " + status);
+
+    }
+
+    @Override
+    public void searchState(int state) {
+        if(state == IBeaconProtocol.SEARCH_STARTED){
+            startRefreshAnimation();
+        }else if (state == IBeaconProtocol.SEARCH_END_EMPTY || state == IBeaconProtocol.SEARCH_END_SUCCESS){
+            stopRefreshAnimation();
+        }
+
+    }
+    /* ------------------------------------------------------------------------------------------ */
 
     /**
      * Per the navigation drawer design guidelines, updates the action bar to show the global app

@@ -1,12 +1,35 @@
 package carranza.com.uattendance;
 
 import android.app.Activity;
+import android.app.AlertDialog;
+import android.content.DialogInterface;
 import android.net.Uri;
+import android.os.AsyncTask;
 import android.os.Bundle;
 import android.support.v4.app.Fragment;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.ArrayAdapter;
+import android.widget.Button;
+import android.widget.ListView;
+import android.widget.Toast;
+
+import org.apache.http.HttpResponse;
+import org.apache.http.NameValuePair;
+import org.apache.http.client.HttpClient;
+import org.apache.http.client.entity.UrlEncodedFormEntity;
+import org.apache.http.client.methods.HttpPost;
+import org.apache.http.impl.client.DefaultHttpClient;
+import org.apache.http.message.BasicNameValuePair;
+import org.json.JSONArray;
+import org.json.JSONException;
+import org.json.JSONObject;
+
+import java.io.IOException;
+import java.io.InputStream;
+import java.util.ArrayList;
+import java.util.List;
 
 
 /**
@@ -28,6 +51,9 @@ public class AttendanceFragment extends Fragment {
     private String mParam2;
 
     private OnFragmentInteractionListener mListener;
+
+    private Button openAttendanceButton;
+    private Button setAttendanceButton;
 
     /**
      * Use this factory method to create a new instance of
@@ -64,13 +90,33 @@ public class AttendanceFragment extends Fragment {
             mParam1 = getArguments().getString(ARG_PARAM1);
             mParam2 = getArguments().getString(ARG_PARAM2);
         }
+
+        new GetDocumentsAsyncTask().execute(Utils.getHost() + "api/document");
     }
 
     @Override
     public View onCreateView(LayoutInflater inflater, ViewGroup container,
                              Bundle savedInstanceState) {
+
+        View view = inflater.inflate(R.layout.fragment_attendance, container, false);
+
+        openAttendanceButton = (Button) view.findViewById(R.id.action_open_attendance_button);
+        openAttendanceButton.setOnClickListener(new View.OnClickListener() {
+            public void onClick(View v) {
+                new GetSubjectsAsyncTask().execute(Utils.getHost() + "api/subject");
+            }
+        });
+
+        setAttendanceButton = (Button) view.findViewById(R.id.action_set_attendance_button);
+        setAttendanceButton.setOnClickListener(new View.OnClickListener() {
+            public void onClick(View v) {
+                new SetAttendanceTask().execute(Utils.getHost() + "api/annotation");
+                Utils.flag = 1;
+            }
+        });
+
         // Inflate the layout for this fragment
-        return inflater.inflate(R.layout.fragment_attendance, container, false);
+        return view;
     }
 
     // TODO: Rename method, update argument and hook method into UI event
@@ -118,4 +164,128 @@ public class AttendanceFragment extends Fragment {
         public void onFragmentInteraction(Uri uri);
     }
 
+    private class SetAttendanceTask extends AsyncTask<String, Void, String> {
+
+        @Override
+        protected String doInBackground(String... params) {
+            HttpClient httpClient = null;
+            HttpPost request = null;
+            HttpResponse httpResponse = null;
+            InputStream inputStream = null;
+            String result = "";
+
+            try {
+                httpClient = new DefaultHttpClient();
+
+                request = new HttpPost(params[0]);
+                // request.addHeader("X_UPI_PASSWORD", UserModel.getUser().getPassword());
+                // request.addHeader("X_UPI_USERNAME", UserModel.getUser().getEmail());
+                request.addHeader("X_PASSWORD", "caracola");
+                request.addHeader("X_USERNAME", "carranzafr@gmail.com");
+
+                httpClient.execute(request);
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+
+            return result;
+        }
+
+        // onPostExecute displays the results of the AsyncTask.
+        @Override
+        protected void onPostExecute(String result) {
+            Toast.makeText(getView().getContext(), "Annotation Successful!", Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    private class GetSubjectsAsyncTask extends AsyncTask<String, Void, String> {
+
+        private JSONArray subjects;
+        private String mSelectedSubject;
+        private ArrayAdapter<String> s = new ArrayAdapter<String>(
+                getView().getContext(),
+                android.R.layout.select_dialog_singlechoice);
+
+        @Override
+        protected String doInBackground(String... params) {
+            return Utils.requestGet(params[0]);
+        }
+
+        // onPostExecute displays the results of the AsyncTask.
+        @Override
+        protected void onPostExecute(String result) {
+            try {
+                subjects = new JSONArray(result);
+                for (int i = 0; i < subjects.length(); i++) {
+                    JSONObject subject = subjects.getJSONObject(i);
+
+                    s.add(subject.getString("iniciales"));
+                }
+            } catch (JSONException e) {
+                e.printStackTrace();
+            }
+
+            AlertDialog.Builder builder = new AlertDialog.Builder(getView().getContext());
+            builder.setTitle(R.string.title_dialog_select_subject)
+                    .setSingleChoiceItems(s, -1,
+                            new DialogInterface.OnClickListener() {
+                                @Override
+                                public void onClick(DialogInterface dialog, int which) {
+                                    mSelectedSubject = s.getItem(which);
+                                }
+                            })
+                    .setNegativeButton(R.string.action_cancel, new DialogInterface.OnClickListener() {
+                        @Override
+                        public void onClick(DialogInterface dialog, int id) {
+                        }
+                    })
+                    .setPositiveButton(R.string.action_ok, new DialogInterface.OnClickListener() {
+                        @Override
+                        public void onClick(DialogInterface dialog, int id) {
+                            new CreateAttendanceAsyncTask().execute(Utils.getHost() + "api/attendance", mSelectedSubject);
+                        }
+                    });
+
+            AlertDialog dialog = builder.create();
+            dialog.show();
+        }
+    }
+
+    private class CreateAttendanceAsyncTask extends AsyncTask<String, Void, String> {
+
+        @Override
+        protected String doInBackground(String... params) {
+            List<NameValuePair> nameValuePairs = new ArrayList<NameValuePair>(2);
+            nameValuePairs.add(new BasicNameValuePair("end", "30"));
+            nameValuePairs.add(new BasicNameValuePair("tipo", "T"));
+            nameValuePairs.add(new BasicNameValuePair("iniciales", params[1]));
+            nameValuePairs.add(new BasicNameValuePair("bMAC", "00:15:83:0C:BF:EC"));
+
+            return Utils.requestPost(params[0], nameValuePairs);
+        }
+
+        @Override
+        protected void onPostExecute(String result) {
+            Toast.makeText(getView().getContext(), "Attendance Open!", Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    /* ------------------------------------------------------------------------------------------ */
+
+    private class GetDocumentsAsyncTask extends AsyncTask<String, Void, String> {
+
+        @Override
+        protected String doInBackground(String... params) {
+            return Utils.requestGet(params[0]);
+        }
+
+        @Override
+        protected void onPostExecute(String result) {
+            try {
+                Utils.documents = new JSONArray(result);
+            } catch (JSONException e) {
+                e.printStackTrace();
+            }
+        }
+    }
 }

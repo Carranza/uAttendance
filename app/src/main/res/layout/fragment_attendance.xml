@@ -4,7 +4,25 @@
     tools:context="carranza.com.uattendance.AttendanceFragment">
 
     <!-- TODO: Update blank fragment layout -->
-    <TextView android:layout_width="match_parent" android:layout_height="match_parent"
-        android:text="@string/hello_blank_fragment" />
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical">
+        <Button
+            android:layout_width="fill_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/action_open_attendance"
+            android:id="@+id/action_open_attendance_button"
+            android:layout_gravity="left|top" />
+
+        <Button
+            android:layout_width="fill_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/action_set_attendance"
+            android:id="@+id/action_set_attendance_button"
+            android:layout_gravity="left|top" />
+
+    </LinearLayout>
+
 
 </FrameLayout>
